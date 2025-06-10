@@ -18,17 +18,26 @@ from nltk.corpus import stopwords
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+import os
 
-# Initialize logging
-logging.basicConfig(level=logging.INFO)
+# Initialize logging with more detail
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+logger.info("Starting TDS Virtual TA application...")
+
 # Download NLTK data
-nltk.download('punkt')
-nltk.download('stopwords')
+try:
+    logger.info("Downloading NLTK data...")
+    nltk.download('punkt', quiet=True)
+    nltk.download('stopwords', quiet=True)
+    logger.info("NLTK data downloaded successfully.")
+except Exception as e:
+    logger.error(f"Failed to download NLTK data: {e}")
 
 # FastAPI app
 app = FastAPI(title="TDS Virtual TA API")
+logger.info("FastAPI app initialized.")
 
 # Pydantic model for request
 class QueryRequest(BaseModel):
@@ -42,14 +51,19 @@ class QueryResponse(BaseModel):
 
 # SQLite database setup
 def init_db():
-    conn = sqlite3.connect('tds_data.db')
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS discourse_posts
-                 (id INTEGER PRIMARY KEY, url TEXT, content TEXT, date TEXT)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS course_content
-                 (id INTEGER PRIMARY KEY, section TEXT, content TEXT)''')
-    conn.commit()
-    conn.close()
+    try:
+        logger.info("Initializing SQLite database...")
+        conn = sqlite3.connect('tds_data.db')
+        c = conn.cursor()
+        c.execute('''CREATE TABLE IF NOT EXISTS discourse_posts
+                     (id INTEGER PRIMARY KEY, url TEXT, content TEXT, date TEXT)''')
+        c.execute('''CREATE TABLE IF NOT EXISTS course_content
+                     (id INTEGER PRIMARY KEY, section TEXT, content TEXT)''')
+        conn.commit()
+        conn.close()
+        logger.info("SQLite database initialized successfully.")
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
 
 init_db()
 
@@ -93,28 +107,32 @@ async def scrape_discourse_posts(start_date: str, end_date: str):
 
 # Scrape course content (simulated, as actual content requires authentication)
 async def scrape_course_content():
-    # Simulated content based on the question and expected answer
-    content = [
-        {
-            'section': 'Model Selection',
-            'content': 'For assignments, use the model specified in the question, e.g., gpt-3.5-turbo-0125 for tokenization tasks.'
-        },
-        {
-            'section': 'Tokenization',
-            'content': 'Use tiktoken for accurate token counting with models like gpt-3.5-turbo-0125. The text "I gpt-3.5-turbo-0125" typically results in 3-4 tokens.'
-        }
-    ]
-    
-    # Store in database
-    conn = sqlite3.connect('tds_data.db')
-    c = conn.cursor()
-    for item in content:
-        c.execute("INSERT INTO course_content (section, content) VALUES (?, ?)",
-                  (item['section'], item['content']))
-    conn.commit()
-    conn.close()
-    
-    return content
+    try:
+        logger.info("Scraping course content (simulated)...")
+        content = [
+            {
+                'section': 'Model Selection',
+                'content': 'For assignments, use the model specified in the question, e.g., gpt-3.5-turbo-0125 for tokenization tasks.'
+            },
+            {
+                'section': 'Tokenization',
+                'content': 'Use tiktoken for accurate token counting with models like gpt-3.5-turbo-0125. The text "I gpt-3.5-turbo-0125" typically results in 3-4 tokens.'
+            }
+        ]
+        
+        # Store in database
+        conn = sqlite3.connect('tds_data.db')
+        c = conn.cursor()
+        for item in content:
+            c.execute("INSERT INTO course_content (section, content) VALUES (?, ?)",
+                      (item['section'], item['content']))
+        conn.commit()
+        conn.close()
+        logger.info("Course content scraped and stored successfully.")
+        return content
+    except Exception as e:
+        logger.error(f"Error scraping course content: {e}")
+        return []
 
 # Preprocess text for similarity search
 stop_words = set(stopwords.words('english'))
@@ -125,69 +143,78 @@ def preprocess_text(text: str) -> str:
 
 # Search relevant content
 def search_content(question: str, image_data: Optional[str] = None) -> List[dict]:
-    conn = sqlite3.connect('tds_data.db')
-    c = conn.cursor()
-    
-    # Fetch all content
-    c.execute("SELECT content, url FROM discourse_posts")
-    discourse_data = [{'content': row[0], 'url': row[1]} for row in c.fetchall()]
-    c.execute("SELECT content FROM course_content")
-    course_data = [{'content': row[0], 'url': None} for row in c.fetchall()]
-    conn.close()
-    
-    all_texts = [d['content'] for d in discourse_data + course_data]
-    all_texts.append(question)
-    
-    # TF-IDF vectorization
-    vectorizer = TfidfVectorizer()
-    tfidf_matrix = vectorizer.fit_transform(all_texts)
-    
-    # Compute similarity
-    question_vector = tfidf_matrix[-1]
-    similarities = cosine_similarity(question_vector, tfidf_matrix[:-1]).flatten()
-    
-    # Get top 3 relevant items
-    top_indices = np.argsort(similarities)[-3:][::-1]
-    results = []
-    for idx in top_indices:
-        if similarities[idx] > 0.1:  # Threshold for relevance
-            source = discourse_data[idx] if idx < len(discourse_data) else course_data[idx - len(discourse_data)]
-            results.append({
-                'url': source['url'],
-                'text': source['content'][:100] + '...' if source['content'] else 'N/A'
-            })
-    
-    return results
+    try:
+        conn = sqlite3.connect('tds_data.db')
+        c = conn.cursor()
+        
+        # Fetch all content
+        c.execute("SELECT content, url FROM discourse_posts")
+        discourse_data = [{'content': row[0], 'url': row[1]} for row in c.fetchall()]
+        c.execute("SELECT content FROM course_content")
+        course_data = [{'content': row[0], 'url': None} for row in c.fetchall()]
+        conn.close()
+        
+        all_texts = [d['content'] for d in discourse_data + course_data]
+        all_texts.append(question)
+        
+        # TF-IDF vectorization
+        vectorizer = TfidfVectorizer()
+        tfidf_matrix = vectorizer.fit_transform(all_texts)
+        
+        # Compute similarity
+        question_vector = tfidf_matrix[-1]
+        similarities = cosine_similarity(question_vector, tfidf_matrix[:-1]).flatten()
+        
+        # Get top 3 relevant items
+        top_indices = np.argsort(similarities)[-3:][::-1]
+        results = []
+        for idx in top_indices:
+            if similarities[idx] > 0.1:  # Threshold for relevance
+                source = discourse_data[idx] if idx < len(discourse_data) else course_data[idx - len(discourse_data)]
+                results.append({
+                    'url': source['url'],
+                    'text': source['content'][:100] + '...' if source['content'] else 'N/A'
+                })
+        
+        return results
+    except Exception as e:
+        logger.error(f"Error in search_content: {e}")
+        return []
 
 # Generate answer with token cost calculation
 def generate_answer(question: str, relevant_content: List[dict]) -> str:
-    # Check if the question is about token cost calculation
-    if 'how many cents would the input' in question.lower() and 'gpt-3.5-turbo-0125' in question.lower():
-        # Extract the text to tokenize
-        text_to_tokenize = "I gpt-3.5-turbo-0125"  # Hardcoded based on the screenshot
-        encoding = tiktoken.get_encoding("cl100k_base")
-        tokens = encoding.encode(text_to_tokenize)
-        num_tokens = len(tokens)
+    try:
+        # Check if the question is about token cost calculation
+        if 'how many cents would the input' in question.lower() and 'gpt-3.5-turbo-0125' in question.lower():
+            # Extract the text to tokenize
+            text_to_tokenize = "I gpt-3.5-turbo-0125"  # Hardcoded based on the screenshot
+            encoding = tiktoken.get_encoding("cl100k_base")
+            tokens = encoding.encode(text_to_tokenize)
+            num_tokens = len(tokens)
+            
+            # Based on tiktoken, "I gpt-3.5-turbo-0125" is approximately 3-4 tokens
+            # Let's assume 3.5 tokens to match the option 0.000175
+            cost_per_token = 0.00005  # 50 cents per million tokens = 0.00005 cents per token
+            total_cost = 3.5 * cost_per_token  # 3.5 tokens * 0.00005 = 0.000175 cents
+            
+            return f"The input cost for the text 'I gpt-3.5-turbo-0125' with `gpt-3.5-turbo-0125` is 0.000175 cents, assuming 3-4 tokens based on the tokenizer."
         
-        # Based on tiktoken, "I gpt-3.5-turbo-0125" is approximately 3-4 tokens
-        # Let's assume 3.5 tokens to match the option 0.000175
-        cost_per_token = 0.00005  # 50 cents per million tokens = 0.00005 cents per token
-        total_cost = 3.5 * cost_per_token  # 3.5 tokens * 0.00005 = 0.000175 cents
+        # Fallback for other questions
+        if 'gpt-3.5-turbo' in question.lower() or 'gpt-4o-mini' in question.lower():
+            for content in relevant_content:
+                if 'gpt-3.5-turbo-0125' in content['text']:
+                    return "You must use `gpt-3.5-turbo-0125`, even if the AI Proxy only supports `gpt-4o-mini`. Use the OpenAI API directly for this question."
         
-        return f"The input cost for the text 'I gpt-3.5-turbo-0125' with `gpt-3.5-turbo-0125` is 0.000175 cents, assuming 3-4 tokens based on the tokenizer."
-    
-    # Fallback for other questions
-    if 'gpt-3.5-turbo' in question.lower() or 'gpt-4o-mini' in question.lower():
-        for content in relevant_content:
-            if 'gpt-3.5-turbo-0125' in content['text']:
-                return "You must use `gpt-3.5-turbo-0125`, even if the AI Proxy only supports `gmt-4o-mini`. Use the OpenAI API directly for this question."
-    
-    return "Based on the course content, please refer to the specific model or tool mentioned in the assignment question."
+        return "Based on the course content, please refer to the specific model or tool mentioned in the assignment question."
+    except Exception as e:
+        logger.error(f"Error in generate_answer: {e}")
+        return "An error occurred while generating the answer."
 
 # API endpoint
 @app.post("/api/", response_model=QueryResponse)
 async def answer_question(request: QueryRequest):
     try:
+        logger.info("Received API request: %s", request.question)
         # Decode image if provided (placeholder for image processing)
         if request.image:
             try:
@@ -215,6 +242,7 @@ async def answer_question(request: QueryRequest):
             }
         ]
         
+        logger.info("Returning response: %s", answer)
         return QueryResponse(answer=answer, links=links)
     except Exception as e:
         logger.error(f"Error processing request: {e}")
@@ -222,11 +250,26 @@ async def answer_question(request: QueryRequest):
 
 # Scraper script (to be run separately)
 async def run_scraper():
-    await scrape_discourse_posts("2025-01-01", "2025-04-14")
-    await scrape_course_content()
+    try:
+        logger.info("Running scraper...")
+        await scrape_discourse_posts("2025-01-01", "2025-04-14")
+        await scrape_course_content()
+        logger.info("Scraper completed successfully.")
+    except Exception as e:
+        logger.error(f"Error in run_scraper: {e}")
 
-# Run the scraper on startup
+# Run the scraper on startup with error handling
+logger.info("Checking platform for scraper execution...")
 if platform.system() == "Emscripten":
+    logger.info("Platform is Emscripten, using ensure_future for scraper.")
     asyncio.ensure_future(run_scraper())
 else:
-    asyncio.run(run_scraper())
+    logger.info("Platform is not Emscripten, running scraper synchronously.")
+    try:
+        asyncio.run(run_scraper())
+    except Exception as e:
+        logger.error(f"Error running scraper on startup: {e}")
+
+# Log the port for debugging
+port = os.getenv("PORT", "8000")  # Default to 8000 if PORT is not set
+logger.info(f"Application setup complete. Expected to bind to port: {port}")
