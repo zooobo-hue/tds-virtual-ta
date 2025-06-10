@@ -273,3 +273,15 @@ else:
 # Log the port for debugging
 port = os.getenv("PORT", "8000")  # Default to 8000 if PORT is not set
 logger.info(f"Application setup complete. Expected to bind to port: {port}")
+from fastapi.middleware.cors import CORSMiddleware
+
+app = FastAPI(...)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # For development; restrict in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
