@@ -180,7 +180,7 @@ def generate_answer(question: str, relevant_content: List[dict]) -> str:
     if 'gpt-3.5-turbo' in question.lower() or 'gpt-4o-mini' in question.lower():
         for content in relevant_content:
             if 'gpt-3.5-turbo-0125' in content['text']:
-                return "You must use `gpt-3.5-turbo-0125`, even if the AI Proxy only supports `gpt-4o-mini`. Use the OpenAI API directly for this question."
+                return "You must use `gpt-3.5-turbo-0125`, even if the AI Proxy only supports `gmt-4o-mini`. Use the OpenAI API directly for this question."
     
     return "Based on the course content, please refer to the specific model or tool mentioned in the assignment question."
 
@@ -225,11 +225,8 @@ async def run_scraper():
     await scrape_discourse_posts("2025-01-01", "2025-04-14")
     await scrape_course_content()
 
-# Main execution
+# Run the scraper on startup
 if platform.system() == "Emscripten":
     asyncio.ensure_future(run_scraper())
 else:
-    if __name__ == "__main__":
-        asyncio.run(run_scraper())
-        import uvicorn
-        uvicorn.run(app, host="0.0.0.0", port=8000)
+    asyncio.run(run_scraper())
