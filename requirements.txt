@@ -1,4 +1,5 @@
 fastapi==0.110.0
+fastapi[all]
 uvicorn==0.29.0
 aiohttp==3.9.3
 beautifulsoup4==4.12.3
